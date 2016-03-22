@@ -8,18 +8,17 @@ use Bio::DB::Taxonomy::flatfile;
 # See POD documentation at the end -- or type "perldoc bam_tax_count.pl" at the CL
 
 # reconfigure depending on your system
+my $email = 'jonathan.jacobs@gmail.com';
 my $taxonomydir = '/home/share/NCBI/taxonomy/';
 my $nodesfile = $taxonomydir.'nodes.dmp';
 my $namesfile = $taxonomydir.'names.dmp';
-my $gi_to_taxids_file = $taxonomydir.'gi_taxid_nucl.dmp';
 
 my %reads_to_gi; #had of read names mapped to a REF of GI's (which is an array)
 my %gi_counts; #hash of Genome ID's => #mapped reads
 my %taxon_counts; # hash of TAXONOMIC ID's => #mapped reads
-#my %gi_taxid_map; # hash of GI > TAXID for all of NCBI
 
 # cant seem to get local flatfile to work... so, using Entrez method (MUCH SLOWER)
-my $taxdb = Bio::DB::Taxonomy->new( -email	=> 'jjacobs@mriglobal.org', -source => 'entrez', -location => 'http://eutils.ncbi.nlm.nih.gov/entrez/eutils/' ); 
+my $taxdb = Bio::DB::Taxonomy->new( -email	=> $email, -source => 'entrez', -location => 'http://eutils.ncbi.nlm.nih.gov/entrez/eutils/' ); 
 
 #create hash of arrays of $reads_to_gi{ $READNAME } => [ GI1, GI2, GI3... GIn]
 foreach my $bamline (<STDIN>) {
@@ -54,7 +53,6 @@ foreach my $taxonid (keys %taxon_counts ){
 	print $taxon->rank(),"\t";
 	print $names[0],"\t";
 	print $taxon_counts{ $taxonid },"\n";
-	
 }
 
 exit;
