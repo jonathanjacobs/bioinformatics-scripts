@@ -4,7 +4,7 @@ use Bio::DB::Taxonomy;
 use Bio::DB::Taxonomy::flatfile;
 
 # bam_tax_count.pl
-# v 1.1
+# v. 1.1
 # See POD documentation at the end -- or type "perldoc bam_tax_count.pl" at the CL
 
 # reconfigure depending on your system
