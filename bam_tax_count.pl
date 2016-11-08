@@ -1,33 +1,55 @@
+#!/usr/bin/perl
+
 use strict;
 use warnings;
 use Bio::DB::Taxonomy;
 use Bio::DB::Taxonomy::flatfile;
+use Get::Opt::Long;
 
 # bam_tax_count.pl
-# v. 1.1
 # See POD documentation at the end -- or type "perldoc bam_tax_count.pl" at the CL
 
-# reconfigure depending on your system
+# reconfigure depending on your system with command line options, defaults are listed below
 my $email = 'jonathan.jacobs@gmail.com';
 my $taxonomydir = '/home/share/NCBI/taxonomy/';
 my $nodesfile = $taxonomydir.'nodes.dmp';
 my $namesfile = $taxonomydir.'names.dmp';
+my $querylimit = 10; # maximum number of tries to get GI from Entrez 
+my $verbose= 0; # change to 1 to make it spew out extra info
+my $readpreference = ""; # flag that will pick reads based on preference, best=unq reads only
+
+GetOptions (
+	"email=s"			=> \$email,
+	"taxonomydir=s" 	=> \$taxonomydir,
+	"nodesfile=s" 		=> \$nodesfile,
+	"namesfile=s" 		=> \$namesfile,
+	"querylimit=s" 		=> \$querylimit,
+	"verbose=i"			=> \$verbose,
+	"readpreference=s"	=> \$readpreference,
+	)   # flag
+or die("Error in command line arguments\n");
 
 my %reads_to_gi; #had of read names mapped to a REF of GI's (which is an array)
 my %gi_counts; #hash of Genome ID's => #mapped reads
 my %taxon_counts; # hash of TAXONOMIC ID's => #mapped reads
 
 # cant seem to get local flatfile to work... so, using Entrez method (MUCH SLOWER)
-my $taxdb = Bio::DB::Taxonomy->new( -email	=> $email, -source => 'entrez', -location => 'http://eutils.ncbi.nlm.nih.gov/entrez/eutils/' ); 
+my $taxdb = Bio::DB::Taxonomy->new(
+	-email	=> $email, 
+	-source => 'entrez',
+	-location => 'http://eutils.ncbi.nlm.nih.gov/entrez/eutils/'
+); 
 
 #create hash of arrays of $reads_to_gi{ $READNAME } => [ GI1, GI2, GI3... GIn]
 foreach my $bamline (<STDIN>) {
 	my @cols = split("\t",$bamline);
 	my ($gi) = $cols[2] =~ m/gi\|(\S+?)\|\S+?\|\S+?\|/g;
 	push( @{ $reads_to_gi { $cols[0] } }, $gi ); #push the GI# onto the array of GI's for that specific read
+	if( $verbose ){ print $gi,"\t",$cols[0],"\t",$cols[2],"\n"; }
 }
 
 #now count all reads for each GI. Multi-mapped reads get fractional values - ie if a read maps to 2 GIs, it gets 0.5 per GI
+if( $verbose ){ print "Counting GI's assigned to each read\n"; }
 foreach my $read (keys %reads_to_gi){
 	foreach my $gi (@{$reads_to_gi{$read}}){
 		if( exists $gi_counts{ $gi } ){
@@ -40,11 +62,27 @@ foreach my $read (keys %reads_to_gi){
 
 # call rollup_taxons and add up the read counts
 foreach my $gi (keys %gi_counts){
-	my $taxon = $taxdb->get_taxon( -gi=> $gi, -db=> 'nucleotide' );
+	if( $verbose ){ print "NCBI Query GI: ",$gi; }
+	my $counter = 0;
+	my $taxon;
+	while(1){
+		if( $verbose ){ print "."; }
+		$taxon = $taxdb->get_taxon( -gi=> $gi, -db=> 'nucleotide' );
+		if( defined($taxon) ) { last; }
+		$counter++;
+		if($counter > $querylimit && undef($taxon) ) {
+			die "Could not create \$taxon object from GI# $gi in get_taxon fnc",$!;
+		}
+	}
+	if( $verbose ){ print " Success\n"; }
+
     rollup_taxons( $taxon, $gi_counts{ $gi });
+
 }
 
 #export the results
+if( $verbose ){ print "Printing counts\n"; }
+
 foreach my $taxonid (keys %taxon_counts ){
 	my $taxon = $taxdb->get_taxon(-taxonid => $taxonid);
 	my @names = @{$taxon->name('scientific')};
@@ -146,6 +184,12 @@ either expressed or implied, of the FreeBSD Project.
 =head1 CHANGELOG
 
 CHANGE LOG
+
+v1.2 (25 MAR 2016)
+- added maximum number of Entrez queries per GI to 10
+- added some code to check for successful get_taxon call against Entrez
+- added command line options with Get::Opt::Long
+- added verbosity option
 
 v1.1 (22 MAR 2016)
 - added POD documentation
